@@ -28,7 +28,7 @@ export default function RunDetailPage() {
   const runId = params.runId as string;
   const [run, setRun] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [nodeStatuses, setNodeStatuses] = useState<Record<string, string>>({});
+  const [nodeStatuses, setNodeStatuses] = useState<Record<string, 'pending' | 'started' | 'completed' | 'failed'>>({});
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['plays']));
 
   const toggleSection = useCallback((section: string) => {
@@ -54,7 +54,7 @@ export default function RunDetailPage() {
           source = streamRun(
             runId,
             (event: NodeProgress) => {
-              setNodeStatuses((prev) => ({ ...prev, [event.node]: event.status }));
+              setNodeStatuses((prev) => ({ ...prev, [event.node]: event.status as 'pending' | 'started' | 'completed' | 'failed' }));
             },
             async () => {
               // Refetch full status on completion
