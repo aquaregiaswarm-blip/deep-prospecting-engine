@@ -32,6 +32,7 @@ from src.api.models import (
 )
 from src.api.run_store import run_store
 from src.api.project_store import project_store
+from src.db.engine import init_db
 from src.graph.state import ProspectingState
 from src.graph.workflow import build_workflow
 
@@ -42,6 +43,8 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan — startup/shutdown."""
     logger.info("🜆 Deep Prospecting Engine API starting up")
+    await init_db()
+    logger.info("🜆 Database tables initialized")
     yield
     logger.info("🜆 Deep Prospecting Engine API shutting down")
 
@@ -264,7 +267,7 @@ async def start_prospect(request: ProspectRequest, background_tasks: BackgroundT
 @app.get("/api/prospect/{run_id}/status", response_model=RunDetail, tags=["prospecting"])
 async def get_run_status(run_id: str):
     """Get full status and results for a prospecting run."""
-    detail = run_store.get_detail(run_id)
+    detail = await run_store.aget_detail(run_id)
     if not detail:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     return detail
@@ -273,7 +276,7 @@ async def get_run_status(run_id: str):
 @app.get("/api/prospect/{run_id}/stream", tags=["prospecting"])
 async def stream_run_progress(run_id: str):
     """SSE endpoint for real-time node progress updates."""
-    run = run_store.get_run(run_id)
+    run = await run_store.aget_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
 
@@ -281,7 +284,7 @@ async def stream_run_progress(run_id: str):
         queue = run_store.subscribe(run_id)
         try:
             # If already completed, send final state immediately
-            current = run_store.get_run(run_id)
+            current = await run_store.aget_run(run_id)
             if current and current["status"] in (RunStatus.COMPLETED, RunStatus.FAILED):
                 event = NodeProgress(
                     run_id=run_id,
@@ -319,7 +322,7 @@ async def stream_run_progress(run_id: str):
 @app.get("/api/runs", response_model=list[RunSummary], tags=["prospecting"])
 async def list_runs():
     """List all prospecting runs, most recent first."""
-    return run_store.list_runs()
+    return await run_store.alist_runs()
 
 
 # --- Project endpoints ---
