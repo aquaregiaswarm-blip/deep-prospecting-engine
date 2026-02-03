@@ -12,9 +12,8 @@ RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 # Copy source
 COPY . .
 
-# Build args for env vars needed at build time
-ARG NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+# API URL baked in at build time
+ENV NEXT_PUBLIC_API_URL=https://dpe-backend-841327020312.us-east1.run.app
 
 # Build
 RUN npx next build
