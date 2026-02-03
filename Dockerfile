@@ -34,7 +34,7 @@ COPY . .
 # Copy built frontend
 COPY --from=frontend-builder /app/frontend/.next/standalone ./frontend-standalone
 COPY --from=frontend-builder /app/frontend/.next/static ./frontend-standalone/.next/static
-COPY --from=frontend-builder /app/frontend/public ./frontend-standalone/public
+COPY --from=frontend-builder /app/frontend/public ./frontend-standalone/public/
 
 # Create directories
 RUN mkdir -p data/chromadb output
