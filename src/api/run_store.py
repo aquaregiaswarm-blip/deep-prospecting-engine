@@ -25,7 +25,13 @@ class RunStore:
         # SSE subscribers: run_id -> list of asyncio.Queue
         self._subscribers: dict[str, list[asyncio.Queue]] = {}
 
-    def create_run(self, client_name: str, past_sales_history: str, base_research_prompt: str) -> str:
+    def create_run(
+        self,
+        client_name: str,
+        past_sales_history: str,
+        base_research_prompt: str,
+        project_id: Optional[str] = None,
+    ) -> str:
         """Create a new run entry and return its ID."""
         run_id = uuid.uuid4().hex[:12]
         now = datetime.now(timezone.utc)
@@ -42,6 +48,7 @@ class RunStore:
                 "plays_count": 0,
                 "error": None,
                 "state": None,  # Will hold the final ProspectingState
+                "project_id": project_id,
             }
         return run_id
 
@@ -66,6 +73,7 @@ class RunStore:
                     completed_at=r["completed_at"],
                     plays_count=r["plays_count"],
                     error=r["error"],
+                    project_id=r.get("project_id"),
                 )
                 for r in runs
             ]
@@ -107,6 +115,7 @@ class RunStore:
                 completed_at=r["completed_at"],
                 plays_count=r["plays_count"],
                 error=r["error"],
+                project_id=r.get("project_id"),
                 deep_research_report=state.deep_research_report if state else "",
                 client_vertical=state.client_vertical if state else "",
                 client_domain=state.client_domain if state else "",
