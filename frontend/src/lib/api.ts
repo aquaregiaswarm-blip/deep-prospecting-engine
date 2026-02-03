@@ -13,9 +13,11 @@ export interface RunSummary {
   completed_at: string | null;
   plays_count: number;
   error: string | null;
+  project_id?: string;
 }
 
 export interface RunDetail extends RunSummary {
+  project_id?: string;
   deep_research_report: string;
   client_vertical: string;
   client_domain: string;
@@ -54,6 +56,47 @@ export interface ProspectRequest {
   client_name: string;
   past_sales_history?: string;
   base_research_prompt?: string;
+}
+
+export interface ProjectSummary {
+  project_id: string;
+  client_name: string;
+  created_at: string;
+  updated_at: string;
+  iteration_count: number;
+  latest_status: 'pending' | 'running' | 'completed' | 'failed' | null;
+  saved_plays_count: number;
+  tags: string[];
+}
+
+export interface SavedPlay {
+  play_id: string;
+  iteration_id: string;
+  play_data: {
+    title: string;
+    challenge: string;
+    market_standard: string;
+    proposed_solution: string;
+    business_outcome: string;
+    technical_stack: string[];
+    confidence_score: number;
+    citations: Array<{ title: string; url: string; snippet: string }>;
+  };
+  notes: string;
+  saved_at: string;
+}
+
+export interface ProjectDetail extends ProjectSummary {
+  notes: string;
+  iterations: RunSummary[];
+  saved_plays: SavedPlay[];
+}
+
+export interface IterateRequest {
+  past_sales_history?: string;
+  base_research_prompt?: string;
+  parent_iteration_id?: string;
+  build_on_previous?: boolean;
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -114,4 +157,68 @@ export function streamRun(
   };
 
   return source;
+}
+
+// --- Project API ---
+
+export async function listProjects(): Promise<ProjectSummary[]> {
+  return apiFetch<ProjectSummary[]>('/api/projects');
+}
+
+export async function getProject(projectId: string): Promise<ProjectDetail> {
+  return apiFetch<ProjectDetail>(`/api/projects/${projectId}`);
+}
+
+export async function createProject(data: {
+  client_name: string;
+  tags?: string[];
+  notes?: string;
+}): Promise<ProjectSummary> {
+  return apiFetch<ProjectSummary>('/api/projects', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateProject(
+  projectId: string,
+  data: { client_name?: string; notes?: string; tags?: string[] },
+): Promise<ProjectSummary> {
+  return apiFetch<ProjectSummary>(`/api/projects/${projectId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  await apiFetch<void>(`/api/projects/${projectId}`, { method: 'DELETE' });
+}
+
+export async function startIteration(
+  projectId: string,
+  req: IterateRequest,
+): Promise<RunSummary> {
+  return apiFetch<RunSummary>(`/api/projects/${projectId}/iterate`, {
+    method: 'POST',
+    body: JSON.stringify(req),
+  });
+}
+
+export async function savePlay(
+  projectId: string,
+  data: { iteration_id: string; play_index: number; notes?: string },
+): Promise<SavedPlay> {
+  return apiFetch<SavedPlay>(`/api/projects/${projectId}/plays`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function removeSavedPlay(
+  projectId: string,
+  playId: string,
+): Promise<void> {
+  await apiFetch<void>(`/api/projects/${projectId}/plays/${playId}`, {
+    method: 'DELETE',
+  });
 }

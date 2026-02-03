@@ -6,15 +6,14 @@ import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/theme-provider';
 import {
   LayoutDashboard,
-  Search,
+  FolderPlus,
   Sun,
   Moon,
-  Beaker,
 } from 'lucide-react';
 
 const navItems = [
   { label: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { label: 'New Prospect', href: '/prospect/new', icon: Search },
+  { label: 'New Project', href: '/project/new', icon: FolderPlus },
 ];
 
 export function Sidebar() {

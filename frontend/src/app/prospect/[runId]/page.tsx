@@ -1,10 +1,17 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getRunStatus, streamRun, type RunDetail, type NodeProgress } from '@/lib/api';
+import {
+  getRunStatus,
+  streamRun,
+  savePlay,
+  type RunDetail,
+  type NodeProgress,
+} from '@/lib/api';
 import { PipelineProgress } from '@/components/pipeline-progress';
+import { IterateDialog } from '@/components/iterate-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,15 +28,21 @@ import {
   Loader2,
   AlertTriangle,
   ChevronDown,
+  ChevronRight,
+  Rocket,
+  Star,
 } from 'lucide-react';
 
 export default function RunDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const runId = params.runId as string;
   const [run, setRun] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [nodeStatuses, setNodeStatuses] = useState<Record<string, 'pending' | 'started' | 'completed' | 'failed'>>({});
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['plays']));
+  const [iterateOpen, setIterateOpen] = useState(false);
+  const [savingPlay, setSavingPlay] = useState<number | null>(null);
 
   const toggleSection = useCallback((section: string) => {
     setExpandedSections((prev) => {
@@ -40,7 +53,6 @@ export default function RunDetailPage() {
     });
   }, []);
 
-  // Load initial data + start SSE if running
   useEffect(() => {
     let source: EventSource | null = null;
 
@@ -54,10 +66,12 @@ export default function RunDetailPage() {
           source = streamRun(
             runId,
             (event: NodeProgress) => {
-              setNodeStatuses((prev) => ({ ...prev, [event.node]: event.status as 'pending' | 'started' | 'completed' | 'failed' }));
+              setNodeStatuses((prev) => ({
+                ...prev,
+                [event.node]: event.status as 'pending' | 'started' | 'completed' | 'failed',
+              }));
             },
             async () => {
-              // Refetch full status on completion
               const updated = await getRunStatus(runId);
               setRun(updated);
             },
@@ -70,7 +84,6 @@ export default function RunDetailPage() {
 
     init();
 
-    // Poll status while running
     const interval = setInterval(async () => {
       try {
         const data = await getRunStatus(runId);
@@ -79,7 +92,9 @@ export default function RunDetailPage() {
           clearInterval(interval);
           source?.close();
         }
-      } catch {}
+      } catch {
+        // ignore
+      }
     }, 5000);
 
     return () => {
@@ -87,6 +102,25 @@ export default function RunDetailPage() {
       source?.close();
     };
   }, [runId]);
+
+  async function handleSavePlay(playIndex: number) {
+    if (!run?.project_id) return;
+    setSavingPlay(playIndex);
+    try {
+      await savePlay(run.project_id, {
+        iteration_id: run.run_id,
+        play_index: playIndex,
+      });
+    } catch {
+      // ignore
+    } finally {
+      setSavingPlay(null);
+    }
+  }
+
+  function handleIterateSuccess(newRunId: string) {
+    router.push(`/prospect/${newRunId}`);
+  }
 
   if (loading) {
     return (
@@ -111,14 +145,25 @@ export default function RunDetailPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Back + header */}
-      <Link
-        href="/"
-        className="inline-flex items-center gap-1 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Dashboard
-      </Link>
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1 text-sm text-[hsl(var(--muted-foreground))]">
+        <Link href="/" className="hover:text-[hsl(var(--foreground))] transition-colors">
+          Dashboard
+        </Link>
+        {run.project_id && (
+          <>
+            <ChevronRight className="h-3 w-3" />
+            <Link
+              href={`/project/${run.project_id}`}
+              className="hover:text-[hsl(var(--foreground))] transition-colors"
+            >
+              {run.client_name}
+            </Link>
+          </>
+        )}
+        <ChevronRight className="h-3 w-3" />
+        <span className="text-[hsl(var(--foreground))]">Iteration</span>
+      </nav>
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -141,6 +186,12 @@ export default function RunDetailPage() {
             {run.completed_at && ` • Completed ${formatDate(run.completed_at)}`}
           </p>
         </div>
+        {run.project_id && run.status === 'completed' && (
+          <Button onClick={() => setIterateOpen(true)}>
+            <Rocket className="h-4 w-4" />
+            Iterate from this
+          </Button>
+        )}
       </div>
 
       {/* Errors */}
@@ -158,9 +209,8 @@ export default function RunDetailPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left column: Progress + Client info */}
+        {/* Left column */}
         <div className="space-y-6">
-          {/* Pipeline progress */}
           {isActive && (
             <Card>
               <CardContent className="p-5">
@@ -169,7 +219,6 @@ export default function RunDetailPage() {
             </Card>
           )}
 
-          {/* Client profile card */}
           {run.client_vertical && (
             <Card>
               <CardHeader className="pb-3">
@@ -186,7 +235,6 @@ export default function RunDetailPage() {
             </Card>
           )}
 
-          {/* Competitor analysis */}
           {run.competitor_proofs.length > 0 && (
             <Card>
               <CardHeader className="pb-3">
@@ -209,7 +257,7 @@ export default function RunDetailPage() {
           )}
         </div>
 
-        {/* Right column: Results */}
+        {/* Right column */}
         <div className="lg:col-span-2 space-y-6">
           {/* Sales Plays */}
           {run.refined_plays.length > 0 && (
@@ -225,9 +273,25 @@ export default function RunDetailPage() {
                     <CardContent className="p-5 space-y-3">
                       <div className="flex items-start justify-between">
                         <h4 className="font-semibold">{play.title}</h4>
-                        <Badge variant="outline">
-                          {Math.round(play.confidence_score * 100)}% confidence
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">
+                            {Math.round(play.confidence_score * 100)}% confidence
+                          </Badge>
+                          {run.project_id && (
+                            <button
+                              onClick={() => handleSavePlay(i)}
+                              disabled={savingPlay === i}
+                              className="text-gray-300 hover:text-amber-500 transition-colors disabled:opacity-50"
+                              title="Save play"
+                            >
+                              {savingPlay === i ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Star className="h-4 w-4" />
+                              )}
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div className="grid gap-2 text-sm">
                         <Detail label="Challenge" value={play.challenge} />
@@ -246,7 +310,6 @@ export default function RunDetailPage() {
                           </div>
                         )}
                       </div>
-                      {/* Confidence bar */}
                       <div className="h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
                         <div
                           className="h-full rounded-full bg-pellera-500 transition-all duration-500"
@@ -280,7 +343,7 @@ export default function RunDetailPage() {
                           onClick={() =>
                             downloadMarkdown(
                               content,
-                              `${title.toLowerCase().replace(/\s+/g, '_')}_one_pager.md`
+                              `${title.toLowerCase().replace(/\s+/g, '_')}_one_pager.md`,
                             )
                           }
                         >
@@ -315,7 +378,7 @@ export default function RunDetailPage() {
                       onClick={() =>
                         downloadMarkdown(
                           run.strategic_plan,
-                          `${run.client_name.toLowerCase().replace(/\s+/g, '_')}_strategic_plan.md`
+                          `${run.client_name.toLowerCase().replace(/\s+/g, '_')}_strategic_plan.md`,
                         )
                       }
                     >
@@ -349,7 +412,7 @@ export default function RunDetailPage() {
             </CollapsibleSection>
           )}
 
-          {/* Empty state when no results yet */}
+          {/* Empty state when running */}
           {isActive && run.refined_plays.length === 0 && (
             <Card>
               <CardContent className="p-12 text-center">
@@ -363,13 +426,24 @@ export default function RunDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Iterate Dialog */}
+      {run.project_id && (
+        <IterateDialog
+          open={iterateOpen}
+          onClose={() => setIterateOpen(false)}
+          projectId={run.project_id}
+          parentIterationId={run.run_id}
+          onSuccess={handleIterateSuccess}
+        />
+      )}
     </div>
   );
 }
 
 // --- Utility components ---
 
-function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+function InfoRow({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
   if (!value) return null;
   return (
     <div className="flex items-start gap-2 text-sm">
@@ -399,7 +473,7 @@ function CollapsibleSection({
   children,
 }: {
   title: string;
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
   expanded: boolean;
   onToggle: () => void;
   children: React.ReactNode;
@@ -415,7 +489,7 @@ function CollapsibleSection({
         <ChevronDown
           className={cn(
             'h-4 w-4 text-[hsl(var(--muted-foreground))] transition-transform',
-            expanded && 'rotate-180'
+            expanded && 'rotate-180',
           )}
         />
       </button>
