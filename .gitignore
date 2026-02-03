@@ -34,3 +34,8 @@ Thumbs.db
 .pytest_cache/
 htmlcov/
 .coverage
+
+# Node / Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
