@@ -7,15 +7,37 @@ from sqlalchemy.orm import sessionmaker, Session
 from src.db.models import Base
 
 
+def _get_base_url():
+    """Build the base database URL from environment variables."""
+    url = os.environ.get("DATABASE_URL")
+    if url:
+        return url
+    
+    # Build from individual env vars (Cloud SQL friendly)
+    user = os.environ.get("DB_USER", "postgres")
+    password = os.environ.get("DB_PASS", "dpe-aquaregia-2026")
+    db_name = os.environ.get("DB_NAME", "dpe")
+    
+    # Cloud SQL Unix socket (used by Cloud Run)
+    instance_connection = os.environ.get("INSTANCE_CONNECTION_NAME")
+    if instance_connection:
+        return f"postgresql://{user}:{password}@/{db_name}?host=/cloudsql/{instance_connection}"
+    
+    # Direct TCP (local dev or public IP)
+    host = os.environ.get("DB_HOST", "localhost")
+    port = os.environ.get("DB_PORT", "5432")
+    return f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
+
+
 def _get_async_url():
-    url = os.environ.get("DATABASE_URL", "postgresql://postgres:dpe-aquaregia-2026@localhost:5432/dpe")
+    url = _get_base_url()
     if "asyncpg" not in url:
         url = url.replace("postgresql://", "postgresql+asyncpg://")
     return url
 
 
 def _get_sync_url():
-    url = os.environ.get("DATABASE_URL", "postgresql://postgres:dpe-aquaregia-2026@localhost:5432/dpe")
+    url = _get_base_url()
     if "psycopg2" not in url and "asyncpg" not in url:
         url = url.replace("postgresql://", "postgresql+psycopg2://")
     elif "asyncpg" in url:
