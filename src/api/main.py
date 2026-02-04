@@ -43,8 +43,11 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan — startup/shutdown."""
     logger.info("🜆 Deep Prospecting Engine API starting up")
-    await init_db()
-    logger.info("🜆 Database tables initialized")
+    try:
+        await init_db()
+        logger.info("🜆 Database tables initialized")
+    except Exception as e:
+        logger.error("🜆 Database init failed: %s — continuing without persistence", e)
     yield
     logger.info("🜆 Deep Prospecting Engine API shutting down")
 

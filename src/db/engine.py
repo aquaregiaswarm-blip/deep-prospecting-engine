@@ -13,17 +13,10 @@ def _get_base_url():
     if url:
         return url
     
-    # Build from individual env vars (Cloud SQL friendly)
+    # Build from individual env vars
     user = os.environ.get("DB_USER", "postgres")
     password = os.environ.get("DB_PASS", "dpe-aquaregia-2026")
     db_name = os.environ.get("DB_NAME", "dpe")
-    
-    # Cloud SQL Unix socket (used by Cloud Run)
-    instance_connection = os.environ.get("INSTANCE_CONNECTION_NAME")
-    if instance_connection:
-        return f"postgresql://{user}:{password}@/{db_name}?host=/cloudsql/{instance_connection}"
-    
-    # Direct TCP (local dev or public IP)
     host = os.environ.get("DB_HOST", "localhost")
     port = os.environ.get("DB_PORT", "5432")
     return f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
